@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+import concurrent.futures
+import datetime
+import os
+import subprocess
+import sys
+import time
+import wsgiref.handlers
+
+import feedparser
+import requests
+
+def get(since):
+    fmt = wsgiref.handlers.format_date_time
+    def get_(url):
+        r = requests.get(url, headers={'If-Modified-Since': fmt(since)})
+        return r.text if r.status_code == 200 else ''
+    return get_
+
+def showfeed(feed, since):
+    if feed.bozo:
+        return
+    dt = datetime.datetime
+    for e in feed.entries:
+        if (since is None or
+            dt(*e.date_parsed[:6]) > dt.fromtimestamp(since)):
+            showentry(e)
+
+def showentry(entry):
+    curr = os.path.expanduser('~/.rss/curr')
+    with open(curr, 'w') as f:
+        print(entry.title, file=f)
+        print(entry.date, file=f)
+        print(entry.description, file=f)
+    p = subprocess.Popen(['less', curr])
+    p.wait()
+
+if __name__ == '__main__':
+    with open(os.path.expanduser('~/.rss/urls')) as f:
+        urls = [x for x in f]
+    with open(os.path.expanduser('~/.rss/since')) as f:
+        since = float(f.read())
+    with open(os.path.expanduser('~/.rss/since'), 'w') as f:
+        print(time.time(), file=f)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as e:
+        feeds = e.map(get(since), urls)
+        for feed in feeds:
+            showfeed(feedparser.parse(feed), since)

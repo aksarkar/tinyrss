@@ -2,6 +2,7 @@
 import concurrent.futures
 import datetime
 import os
+import pprint
 import subprocess
 import sys
 import time
@@ -17,32 +18,40 @@ def get(since):
         return r.text if r.status_code == 200 else ''
     return get_
 
-def showfeed(feed, since):
-    if feed.bozo:
-        return
+def pred(since):
     dt = datetime.datetime
+    keys = ['published_parsed', 'updated_parsed', 'created_parsed']
+    def pred_(entry):
+        key = min((i, k) for i, k in enumerate(keys) if k in entry)[1]
+        return (dt(*entry[key][:6]) > dt.fromtimestamp(since))
+    return pred_
+
+def showfeed(url, content, pred):
+    if not content:
+        return
+    feed = feedparser.parse(content)
+    if feed.bozo:
+        print('Failed to parse {}'.format(url), file=sys.stderr)
     for e in feed.entries:
-        if (since is None or
-            dt(*e.date_parsed[:6]) > dt.fromtimestamp(since)):
+        if pred(e):
             showentry(e)
 
 def showentry(entry):
     curr = os.path.expanduser('~/.rss/curr')
     with open(curr, 'w') as f:
-        print(entry.title, file=f)
-        print(entry.date, file=f)
-        print(entry.description, file=f)
+        pprint.pprint(entry, stream=f)
     p = subprocess.Popen(['less', curr])
     p.wait()
 
 if __name__ == '__main__':
     with open(os.path.expanduser('~/.rss/urls')) as f:
-        urls = [x for x in f]
+        urls = [x.strip() for x in f]
     with open(os.path.expanduser('~/.rss/since')) as f:
         since = float(f.read())
     with open(os.path.expanduser('~/.rss/since'), 'w') as f:
         print(time.time(), file=f)
     with concurrent.futures.ThreadPoolExecutor(max_workers=16) as e:
-        feeds = e.map(get(since), urls)
-        for feed in feeds:
-            showfeed(feedparser.parse(feed), since)
+        responses = e.map(get(since), urls)
+        p = pred(since)
+        for u, r in zip(urls, responses):
+            showfeed(u, r, p)

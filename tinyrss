@@ -40,9 +40,52 @@ def showfeed(url, content, pred):
 def showentry(entry):
     curr = os.path.expanduser('~/.tinyrss/curr')
     with open(curr, 'w') as f:
-        pprint.pprint(entry, stream=f)
+        show = ShowContent(f)
+        showfield(entry, 'title', f)
+        showfield(entry, 'author', f)
+        showfield(entry, 'link', f)
+        for t in entry.get('content', []):
+            show.feed(t.value)
+            show.close()
     p = subprocess.Popen(['less', curr])
     p.wait()
+
+def showfield(entry, k, f):
+    if entry.has_key(k):
+        print(entry.get(k), file=f)
+
+class ShowContent(html.parser.HTMLParser):
+    def __init__(self, f):
+        super(ShowContent, self).__init__()
+        self.f = f
+        self.links = []
+        self.par = []
+        self.addlink = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'p':
+            self.par = []
+        elif tag == 'a':
+            self.links.append(dict(attrs)['href'])
+            self.addlink = True
+
+    def handle_endtag(self, tag):
+        if tag == 'p':
+            print('\n'.join(textwrap.wrap(''.join(self.par), width=80)),
+                  file=self.f, end='\n\n')
+        elif tag == 'a':
+            self.addlink = False
+
+    def handle_data(self, data):
+        self.par.append(data)
+        if self.addlink:
+            self.par.append('[{}]'.format(len(self.links)))
+
+
+    def close(self):
+        for i, l in enumerate(self.links):
+            print('[{}] {}'.format(i + 1, l), file=self.f)
+        super().close()
 
 if __name__ == '__main__':
     with open(os.path.expanduser('~/.tinyrss/urls')) as f:

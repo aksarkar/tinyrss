@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import concurrent.futures
 import datetime
+import functools
 import html.parser
 import os
 import subprocess
@@ -12,20 +13,16 @@ import wsgiref.handlers
 import feedparser
 import requests
 
-def get(since):
+def get(since, url):
     fmt = wsgiref.handlers.format_date_time
-    def get_(url):
-        r = requests.get(url, headers={'If-Modified-Since': fmt(since)})
-        return r.text if r.status_code == 200 else ''
-    return get_
+    r = requests.get(url, headers={'If-Modified-Since': fmt(since)})
+    return r.text if r.status_code == 200 else ''
 
-def pred(since):
+def pred(since, entry):
     dt = datetime.datetime
     keys = ['published_parsed', 'updated_parsed', 'created_parsed']
-    def pred_(entry):
-        key = min((i, k) for i, k in enumerate(keys) if k in entry)[1]
-        return (dt(*entry[key][:6]) > dt.fromtimestamp(since))
-    return pred_
+    key = min((i, k) for i, k in enumerate(keys) if k in entry)[1]
+    return (dt(*entry[key][:6]) > dt.fromtimestamp(since))
 
 def showfeed(url, content, pred):
     if not content:
@@ -95,7 +92,7 @@ if __name__ == '__main__':
     with open(os.path.expanduser('~/.tinyrss/since'), 'w') as f:
         print(time.time(), file=f)
     with concurrent.futures.ThreadPoolExecutor(max_workers=16) as e:
-        responses = e.map(get(since), urls)
-        p = pred(since)
+        responses = e.map(functools.partial(get, since), urls)
+        p = functools.partial(pred, since)
         for u, r in zip(urls, responses):
             showfeed(u, r, p)

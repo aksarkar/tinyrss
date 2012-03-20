@@ -3,20 +3,21 @@ import concurrent.futures
 import datetime
 import functools
 import html.parser
+import itertools
 import os
 import subprocess
 import sys
 import time
 import textwrap
-import wsgiref.handlers
 
 import feedparser
-import requests
 
-def get(since, url):
-    fmt = wsgiref.handlers.format_date_time
-    r = requests.get(url, headers={'If-Modified-Since': fmt(since)})
-    return r.text if r.status_code == 200 else ''
+def parse(kwargs):
+    feed = feedparser.parse(**kwargs)
+    if feed.bozo:
+        print('{}: {}'.format(kwargs['url_file_stream_or_string'],
+              feed.bozo_exception), file=sys.stderr)
+    return feed
 
 def pred(since, entry):
     dt = datetime.datetime
@@ -24,17 +25,15 @@ def pred(since, entry):
     key = min((i, k) for i, k in enumerate(keys) if k in entry)[1]
     return (dt(*entry[key][:6]) > dt.fromtimestamp(since))
 
-def showfeed(url, content, pred):
-    if not content:
-        return
-    feed = feedparser.parse(content)
-    if feed.bozo:
-        print('Failed to parse {}'.format(url), file=sys.stderr)
-    for e in feed.entries:
-        if pred(e):
-            showentry(e)
+def showfeed(feed, pred):
+    if not feed.bozo:
+        for e in feed.entries:
+            showentry(e, p)
+    return feed.get('modified', ''), feed.get('etag', '')
 
-def showentry(entry):
+def showentry(entry, pred):
+    if not pred(entry):
+        return
     curr = os.path.expanduser('~/.tinyrss/curr')
     with open(curr, 'w') as f:
         show = ShowContent(f)
@@ -86,13 +85,26 @@ class ShowContent(html.parser.HTMLParser):
 
 if __name__ == '__main__':
     with open(os.path.expanduser('~/.tinyrss/urls')) as f:
-        urls = [x.strip() for x in f]
+        urls = [line.strip() for line in f]
+    with open(os.path.expanduser('~/.tinyrss/modified')) as f:
+        ms = [line.strip() for line in f]
+    with open(os.path.expanduser('~/.tinyrss/etags')) as f:
+        etags = [line.strip() for line in f]
     with open(os.path.expanduser('~/.tinyrss/since')) as f:
         since = float(f.read())
     with open(os.path.expanduser('~/.tinyrss/since'), 'w') as f:
         print(time.time(), file=f)
+
+    zip = itertools.zip_longest
     with concurrent.futures.ThreadPoolExecutor(max_workers=16) as e:
-        responses = e.map(functools.partial(get, since), urls)
+        feeds = e.map(parse, ({'url_file_stream_or_string': u,
+                                'etag': e,
+                                'modified': m} for u, e, m in
+                                zip(urls, ms, etags)))
         p = functools.partial(pred, since)
-        for u, r in zip(urls, responses):
-            showfeed(u, r, p)
+        ms, etags = zip(*(showfeed(f, p) for f in feeds))
+
+    with open(os.path.expanduser('~/.tinyrss/modified'), 'w') as f:
+        print('\n'.join(ms), file=f)
+    with open(os.path.expanduser('~/.tinyrss/etags'), 'w') as f:
+        print('\n'.join(etags), file=f)

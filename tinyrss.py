@@ -2,13 +2,11 @@
 import concurrent.futures
 import datetime
 import functools
-import html.parser
 import itertools
 import os
 import subprocess
 import sys
 import time
-import textwrap
 
 import feedparser
 
@@ -36,52 +34,22 @@ def showentry(entry, pred):
         return
     curr = os.path.expanduser('~/.tinyrss/curr')
     with open(curr, 'w') as f:
-        show = ShowContent(f)
-        showfield(entry, 'title', f)
-        showfield(entry, 'author', f)
-        showfield(entry, 'link', f)
-        for t in entry.get('content', []):
-            show.feed(t.value)
-            show.close()
-    p = subprocess.Popen(['less', curr])
+        print('<html><head><title></title></head><body>', file=f)
+        showfield(entry, 'title', f, 'h1')
+        showfield(entry, 'author', f, 'h2')
+        showfield(entry, 'link', f, 'p')
+        showfield(entry, 'description', f)
+        print('\n'.join(x.value for x in entry.get('content', [])), file=f)
+        print('</body></html>', file=f)
+    p = subprocess.Popen(['w3m', '-T', 'text/html', curr])
     p.wait()
 
-def showfield(entry, k, f):
+def showfield(entry, k, f, tag=''):
     if entry.has_key(k):
-        print(entry.get(k), file=f)
-
-class ShowContent(html.parser.HTMLParser):
-    def __init__(self, f):
-        super(ShowContent, self).__init__()
-        self.f = f
-        self.links = []
-        self.par = []
-        self.addlink = False
-
-    def handle_starttag(self, tag, attrs):
-        if tag == 'p':
-            self.par = []
-        elif tag == 'a':
-            self.links.append(dict(attrs)['href'])
-            self.addlink = True
-
-    def handle_endtag(self, tag):
-        if tag == 'p':
-            print('\n'.join(textwrap.wrap(''.join(self.par), width=80)),
-                  file=self.f, end='\n\n')
-        elif tag == 'a':
-            self.addlink = False
-
-    def handle_data(self, data):
-        self.par.append(data)
-        if self.addlink:
-            self.par.append('[{}]'.format(len(self.links)))
-
-
-    def close(self):
-        for i, l in enumerate(self.links):
-            print('[{}] {}'.format(i + 1, l), file=self.f)
-        super().close()
+        if tag:
+            print('<{}>{}</{}>'.format(tag, entry.get(k), tag), file=f)
+        else:
+            print(entry.get(k), file=f)
 
 if __name__ == '__main__':
     with open(os.path.expanduser('~/.tinyrss/urls')) as f:
@@ -102,7 +70,7 @@ if __name__ == '__main__':
                                 'modified': m} for u, e, m in
                                 zip(urls, ms, etags)))
         p = functools.partial(pred, since)
-        ms, etags = zip(*(showfeed(f, p) for f in feeds))
+        ms, etags = zip(*[showfeed(f, p) for f in feeds])
 
     with open(os.path.expanduser('~/.tinyrss/modified'), 'w') as f:
         print('\n'.join(ms), file=f)

@@ -38,8 +38,10 @@ def showentry(entry, pred):
         showfield(entry, 'title', f, 'h1')
         showfield(entry, 'author', f, 'h2')
         showfield(entry, 'link', f, 'p')
-        showfield(entry, 'description', f)
-        print('\n'.join(x.value for x in entry.get('content', [])), file=f)
+        if entry.has_key('content'):
+            print('\n'.join(x.value for x in entry.content), file=f)
+        else:
+            showfield(entry, 'description', f)
         print('</body></html>', file=f)
     p = subprocess.Popen(['w3m', '-T', 'text/html', curr])
     p.wait()

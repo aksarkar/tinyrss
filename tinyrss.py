@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import csv
 import concurrent.futures
 import datetime
 import functools
@@ -54,27 +55,22 @@ def showfield(entry, k, f, tag=''):
             print(entry.get(k), file=f)
 
 if __name__ == '__main__':
+    zip = itertools.zip_longest
     with open(os.path.expanduser('~/.tinyrss/urls')) as f:
-        urls = [line.strip() for line in f]
-    with open(os.path.expanduser('~/.tinyrss/modified')) as f:
-        ms = [line.strip() for line in f]
-    with open(os.path.expanduser('~/.tinyrss/etags')) as f:
-        etags = [line.strip() for line in f]
+        data = list(csv.reader(f))
+        while len(data[0]) < 3:
+            data[0].append(None)
+        urls, ms, etags = zip(*data)
     with open(os.path.expanduser('~/.tinyrss/since')) as f:
         since = float(f.read())
     with open(os.path.expanduser('~/.tinyrss/since'), 'w') as f:
         print(time.time(), file=f)
-
-    zip = itertools.zip_longest
     with concurrent.futures.ThreadPoolExecutor(max_workers=16) as e:
         feeds = e.map(parse, ({'url_file_stream_or_string': u,
-                                'etag': e,
-                                'modified': m} for u, e, m in
-                                zip(urls, ms, etags)))
+                               'etag': e,
+                               'modified': m} for u, e, m in
+                               zip(urls, ms, etags)))
         p = functools.partial(pred, since)
         ms, etags = zip(*[showfeed(f, p) for f in feeds])
-
-    with open(os.path.expanduser('~/.tinyrss/modified'), 'w') as f:
-        print('\n'.join(ms), file=f)
-    with open(os.path.expanduser('~/.tinyrss/etags'), 'w') as f:
-        print('\n'.join(etags), file=f)
+    with open(os.path.expanduser('~/.tinyrss/urls'), 'w') as f:
+        csv.writer(f).writerows(zip(urls, ms, etags))

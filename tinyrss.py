@@ -22,7 +22,7 @@ def pred(since, entry):
     dt = datetime.datetime
     keys = ['published_parsed', 'updated_parsed', 'created_parsed']
     key = min((i, k) for i, k in enumerate(keys) if k in entry)[1]
-    return (dt(*entry[key][:6]) > dt.fromtimestamp(since))
+    return (dt(*entry[key][:6]) > dt.utcfromtimestamp(since))
 
 def showfeed(feed, pred):
     if not feed.bozo:

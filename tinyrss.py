@@ -61,8 +61,11 @@ if __name__ == '__main__':
         while len(data[0]) < 3:
             data[0].append(None)
         urls, ms, etags = zip(*data)
-    with open(os.path.expanduser('~/.tinyrss/since')) as f:
-        since = float(f.read())
+    if not os.path.exists(os.path.expanduser('~/.tinyrss/since')):
+        since = 0
+    else:
+        with open(os.path.expanduser('~/.tinyrss/since')) as f:
+            since = float(f.read())
     with open(os.path.expanduser('~/.tinyrss/since'), 'w') as f:
         print(time.time(), file=f)
     with concurrent.futures.ThreadPoolExecutor(max_workers=16) as e:

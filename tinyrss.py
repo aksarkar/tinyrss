@@ -33,7 +33,7 @@ def showfeed(feed, pred):
 def showentry(entry, pred):
     if not pred(entry):
         return
-    curr = os.path.expanduser('~/.tinyrss/curr')
+    curr = os.path.expanduser('~/.tinyrss/curr.html')
     with open(curr, 'w') as f:
         print('<html><head><title></title></head><body>', file=f)
         showfield(entry, 'title', f, 'h1')
@@ -44,7 +44,7 @@ def showentry(entry, pred):
         else:
             showfield(entry, 'description', f)
         print('</body></html>', file=f)
-    p = subprocess.Popen(['w3m', '-T', 'text/html', curr])
+    p = subprocess.Popen([os.path.expanduser('~/.tinyrss/pager'), curr])
     p.wait()
 
 def showfield(entry, k, f, tag=''):

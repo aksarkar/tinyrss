@@ -1,0 +1,22 @@
+-*- org -*-
+
+Tinyrss: a tiny RSS reader
+Author: Abhishek Sarkar <aksarkar@mit.edu>
+
+* Usage
+
+  tinyrss.py
+
+  Does the simplest possible thing, just sequentially feed each new item to
+  your pager, then throw it away.
+
+* Installation
+
+  Put tinyrss.py somewhere on your path
+  Put feed URLs in ~/.tinyrss/urls (separated by newlines)
+  Symlink your favorite browser to ~/.tinyrss/pager
+
+* Dependencies
+
+  python >= 3.2
+  feedparser >= 5

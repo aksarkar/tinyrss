@@ -16,7 +16,10 @@ def parse(kwargs):
     if feed.bozo:
         print('{}: {}'.format(kwargs['url_file_stream_or_string'],
               feed.bozo_exception), file=sys.stderr)
-    return feed
+        return '', [], '', ''
+    else:
+        return (feed.feed.title, feed.entries, feed.get('modified', ''),
+                feed.get('etag', ''))
 
 def pred(since, entry):
     dt = datetime.datetime
@@ -25,34 +28,14 @@ def pred(since, entry):
     return (dt(*entry[key][:6]) > dt.utcfromtimestamp(since))
 
 def showfeed(feed, pred):
-    if not feed.bozo:
-        for e in feed.entries:
-            showentry(e, p)
-    return feed.get('modified', ''), feed.get('etag', '')
-
-def showentry(entry, pred):
-    if not pred(entry):
-        return
-    curr = os.path.expanduser('~/.tinyrss/curr.html')
-    with open(curr, 'w') as f:
-        print('<html><head><title></title></head><body>', file=f)
-        showfield(entry, 'title', f, 'h1')
-        showfield(entry, 'author', f, 'h2')
-        showfield(entry, 'link', f, 'p')
-        if entry.has_key('content'):
-            print('\n'.join(x.value for x in entry.content), file=f)
-        else:
-            showfield(entry, 'description', f)
-        print('</body></html>', file=f)
-    p = subprocess.Popen([os.path.expanduser('~/.tinyrss/pager'), curr])
-    p.wait()
-
-def showfield(entry, k, f, tag=''):
-    if entry.has_key(k):
-        if tag:
-            print('<{}>{}</{}>'.format(tag, entry.get(k), tag), file=f)
-        else:
-            print(entry.get(k), file=f)
+    title, entries, modified, etag = feed
+    if title and entries:
+        new = ['{}\n{}'.format(e.get('title', 'Untitled'), e.get('link', ''))
+               for e in itertools.takewhile(pred, entries)]
+        if new:
+            print('* {}'.format(title))
+            print('\n\n'.join(new), end='\n\n')
+    return modified, etag
 
 if __name__ == '__main__':
     zip = itertools.zip_longest

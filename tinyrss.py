@@ -37,7 +37,7 @@ def showfeed(feed, pred):
             print('\n\n'.join(new), end='\n\n')
     return modified, etag
 
-if __name__ == '__main__':
+def main():
     zip = itertools.zip_longest
     with open(os.path.expanduser('~/.tinyrss/urls')) as f:
         data = list(csv.reader(f))
@@ -60,3 +60,6 @@ if __name__ == '__main__':
         ms, etags = zip(*[showfeed(f, p) for f in feeds])
     with open(os.path.expanduser('~/.tinyrss/urls'), 'w') as f:
         csv.writer(f).writerows(zip(urls, ms, etags))
+
+if __name__ == '__main__':
+    main()

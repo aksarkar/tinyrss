@@ -51,11 +51,11 @@ def main():
             since = float(f.read())
     with open(os.path.expanduser('~/.tinyrss/since'), 'w') as f:
         print(time.time(), file=f)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as e:
-        feeds = e.map(parse, ({'url_file_stream_or_string': u,
-                               'etag': e,
-                               'modified': m} for u, e, m in
-                               zip(urls, ms, etags)))
+    with concurrent.futures.ProcessPoolExecutor() as pool:
+        feeds = pool.map(parse, ({'url_file_stream_or_string': u,
+                                  'etag': e,
+                                  'modified': m} for u, e, m in
+                                  zip(urls, ms, etags)))
         p = functools.partial(pred, since)
         ms, etags = zip(*[showfeed(f, p) for f in feeds])
     with open(os.path.expanduser('~/.tinyrss/urls'), 'w') as f:

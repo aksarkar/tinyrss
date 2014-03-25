@@ -1,65 +1,50 @@
 #!/usr/bin/env python3
-import csv
-import concurrent.futures
-import datetime
-import functools
-import itertools
+import hashlib
 import os
-import subprocess
 import sys
-import time
+import tempfile
 
 import feedparser
 
-def parse(kwargs):
-    feed = feedparser.parse(**kwargs)
-    if feed.bozo:
-        print('{}: {}'.format(kwargs['url_file_stream_or_string'],
-              feed.bozo_exception), file=sys.stderr)
-        return '', [], '', ''
+def guid(entry):
+    if 'id' in entry:
+        return entry.id
     else:
-        return (feed.feed.title, feed.entries, feed.get('modified', ''),
-                feed.get('etag', ''))
+        return entry.link
 
-def pred(since, entry):
-    dt = datetime.datetime
-    keys = ['published_parsed', 'updated_parsed', 'created_parsed']
-    key = min((i, k) for i, k in enumerate(keys) if k in entry)[1]
-    return (dt(*entry[key][:6]) > dt.utcfromtimestamp(since))
-
-def showfeed(feed, pred):
-    title, entries, modified, etag = feed
-    if title and entries:
-        new = ['{}\n{}'.format(e.get('title', 'Untitled'), e.get('link', ''))
-               for e in itertools.takewhile(pred, entries)]
+def handle_feed(url, etag, modified, seen):
+    feed = feedparser.parse(url, etag=etag, modified=modified)
+    if feed.bozo:
+        print('{}: {}'.format(url, feed.bozo_exception), file=sys.stderr)
+        return etag, modified, seen
+    else:
+        s = set(seen)
+        new = [e for e in feed.entries if guid(e) not in s]
         if new:
-            print('* {}'.format(title))
-            print('\n\n'.join(new), end='\n\n')
-    return modified, etag
+            print('* {}'.format(feed.feed.title))
+        for e in new:
+            print('  {}\n  {}'.format(e.get('title', 'Untitled'),
+                                      e.get('link', '')),
+                  end='\n\n')
+        return (feed.get('etag', ''), feed.get('modified', ''),
+                seen + [guid(e) for e in new])
 
 def main():
-    zip = itertools.zip_longest
-    with open(os.path.expanduser('~/.tinyrss/urls')) as f:
-        data = list(csv.reader(f))
-        while len(data[0]) < 3:
-            data[0].append(None)
-        urls, ms, etags = zip(*data)
-    if not os.path.exists(os.path.expanduser('~/.tinyrss/since')):
-        since = 0
+    url = sys.argv[1]
+    h = hashlib.sha1(url.encode('utf-8')).hexdigest()
+    db_path = os.path.join(os.getenv('XDG_CONFIG_HOME',
+                                 os.path.expanduser('~/.config')),
+                                 'tinyrss', h)
+    if os.path.exists(db_path):
+        with open(db_path) as f:
+            etag, modified, *seen = [line.strip() for line in f]
     else:
-        with open(os.path.expanduser('~/.tinyrss/since')) as f:
-            since = float(f.read())
-    with open(os.path.expanduser('~/.tinyrss/since'), 'w') as f:
-        print(time.time(), file=f)
-    with concurrent.futures.ProcessPoolExecutor() as pool:
-        feeds = pool.map(parse, ({'url_file_stream_or_string': u,
-                                  'etag': e,
-                                  'modified': m} for u, e, m in
-                                  zip(urls, ms, etags)))
-        p = functools.partial(pred, since)
-        ms, etags = zip(*[showfeed(f, p) for f in feeds])
-    with open(os.path.expanduser('~/.tinyrss/urls'), 'w') as f:
-        csv.writer(f).writerows(zip(urls, ms, etags))
+        etag, modified, seen = '', '', []
+    etag, modified, seen = handle_feed(url, etag, modified, seen)
+    out = '{}.1'.format(db_path)
+    with open(out, 'w') as f:
+        print(etag, modified, '\n'.join(seen), sep='\n', file=f)
+    os.replace(out, db_path)
 
 if __name__ == '__main__':
     main()

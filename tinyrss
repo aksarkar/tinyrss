@@ -1,0 +1,2 @@
+#!/bin/bash
+parallel -a ${XDG_CONFIG_DIR:-$HOME/.config}/tinyrss/urls tinyrss.py
